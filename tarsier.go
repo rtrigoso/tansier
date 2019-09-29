@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,8 +21,8 @@ var (
 	err error
 
 	regP     = regexp.MustCompile(`(?mi)(\<p\>.+?\<\/p\>)`)
-	regATag  = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
-	regALink = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
+	regATag1 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
+	regATag2 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
 )
 
 var usage = `Usage: tarsier [options...] url
@@ -49,28 +50,34 @@ func main() {
 		os.Exit(0)
 	}
 
-	site := args[0]
-	parseUrl, err := url.Parse(site)
+	body, err := getBody(args[0])
 	if err != nil {
 		return
 	}
 
-	if !parseUrl.IsAbs() {
-		parseUrl.Scheme = "https"
+	if *r {
+		p := bluemonday.NewPolicy()
+		p.AllowAttrs("href").OnElements("a").AllowURLSchemes("http", "https")
+		body = p.Sanitize(string(body))
+
+		links := regATag2.FindAllString(body, -1)
+		if len(links) <= 0 {
+			fmt.Println("Error: tarsier was not able to find parsable links within the passed url")
+			flag.Usage()
+			os.Exit(0)
+		}
+
+		articleUrl := regATag2.ReplaceAllString(links[rand.Intn(len(links))], "$1")
+
+		fmt.Printf("Reading link %s\n", articleUrl)
+		body, err = getBody(articleUrl)
+		if err != nil {
+			return
+		}
 	}
 
-	resp, err := http.Get(parseUrl.String())
-	if err != nil {
-		return
-	}
+	article := getArticle(body)
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
-	article := strings.TrimSpace(getArticle(string(body)))
 	if article == "" {
 		fmt.Println("Error: tarsier was not able to find an article in the provided website url")
 		flag.Usage()
@@ -86,6 +93,31 @@ func main() {
 	}
 }
 
+func getBody(site string) (string, error) {
+	parseUrl, err := url.Parse(site)
+	if err != nil {
+		return "", err
+	}
+
+	if !parseUrl.IsAbs() {
+		parseUrl.Scheme = "https"
+	}
+
+	resp, err := http.Get(parseUrl.String())
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
 func buildParsePolicy() *bluemonday.Policy {
 	p := bluemonday.NewPolicy()
 	p.AllowElements("p", "b", "strong", "code", "em")
@@ -99,7 +131,7 @@ func getArticle(s string) string {
 		content.WriteString(match)
 		content.WriteString("\n\n")
 	}
-	return content.String()
+	return strings.TrimSpace(content.String())
 }
 
 func createParagraph(s string) string {
@@ -120,8 +152,8 @@ func createParagraph(s string) string {
 	content = strings.Replace(content, "</code>", "</>", -1)
 	content = strings.Replace(content, "<p>", "", -1)
 	content = strings.Replace(content, "</p>", "", -1)
-	content = regALink.ReplaceAllString(content, "$2 (<blue>$1</>)")
-	content = regATag.ReplaceAllString(content, "<blue>$1</>")
+	content = regATag2.ReplaceAllString(content, "$2 (<blue>$1</>)")
+	content = regATag1.ReplaceAllString(content, "<blue>$1</>")
 
 	return content
 }
