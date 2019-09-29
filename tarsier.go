@@ -138,7 +138,7 @@ func getBody(site string) (string, error) {
 func buildParsePolicy() *bluemonday.Policy {
 	p := bluemonday.NewPolicy()
 	p.AllowElements("p", "b", "strong", "code", "em")
-	p.AllowAttrs("href").OnElements("a")
+	p.AllowAttrs("href").Matching(regexp.MustCompile(`(?i)http|https?`)).OnElements("a")
 	return p
 }
 
