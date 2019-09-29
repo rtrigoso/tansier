@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -11,18 +12,22 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gookit/color"
 	"github.com/microcosm-cc/bluemonday"
 )
 
 var (
-	r   = flag.Bool("r", false, "")
-	err error
+	r = flag.Bool("r", false, "")
 
+	regTitle = regexp.MustCompile(`(?miU)\<title\>(.+?)\<\/title\>`)
 	regP     = regexp.MustCompile(`(?mi)(\<p\>.+?\<\/p\>)`)
 	regATag1 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
 	regATag2 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
+
+	title string
+	err   error
 )
 
 var usage = `Usage: tarsier [options...] url
@@ -56,21 +61,7 @@ func main() {
 	}
 
 	if *r {
-		p := bluemonday.NewPolicy()
-		p.AllowAttrs("href").OnElements("a").AllowURLSchemes("http", "https")
-		body = p.Sanitize(string(body))
-
-		links := regATag2.FindAllString(body, -1)
-		if len(links) <= 0 {
-			fmt.Println("Error: tarsier was not able to find parsable links within the passed url")
-			flag.Usage()
-			os.Exit(0)
-		}
-
-		articleUrl := regATag2.ReplaceAllString(links[rand.Intn(len(links))], "$1")
-
-		fmt.Printf("Reading link %s\n", articleUrl)
-		body, err = getBody(articleUrl)
+		body, err = getRandomArticle(body)
 		if err != nil {
 			return
 		}
@@ -79,7 +70,7 @@ func main() {
 	article := getArticle(body)
 
 	if article == "" {
-		fmt.Println("Error: tarsier was not able to find an article in the provided website url")
+		fmt.Println("Error: tarsier was not able to parse the article in the provided website url")
 		flag.Usage()
 		os.Exit(0)
 	}
@@ -87,10 +78,33 @@ func main() {
 	p := buildParsePolicy()
 	html := p.Sanitize(string(article))
 
+	color.Println("<cyan>" + title + "</>")
 	for _, match := range regP.FindAllString(html, -1) {
 		p := createParagraph(match)
 		color.Println(p)
 	}
+}
+
+func getRandomArticle(body string) (string, error) {
+	p := bluemonday.NewPolicy()
+	p.AllowAttrs("href").OnElements("a").AllowURLSchemes("http", "https")
+	body = p.Sanitize(string(body))
+
+	links := regATag2.FindAllString(body, -1)
+	if len(links) <= 0 {
+		return "", errors.New("did not find any links on the url")
+	}
+
+	rand.Seed(time.Now().UTC().UnixNano())
+	articleUrl := regATag2.ReplaceAllString(links[rand.Intn(len(links))], "$1")
+
+	fmt.Printf("Reading link %s\n", articleUrl)
+	body, err = getBody(articleUrl)
+	if err != nil {
+		return "", err
+	}
+
+	return body, nil
 }
 
 func getBody(site string) (string, error) {
@@ -126,6 +140,8 @@ func buildParsePolicy() *bluemonday.Policy {
 }
 
 func getArticle(s string) string {
+	title = regTitle.FindStringSubmatch(s)[1]
+
 	var content strings.Builder
 	for _, match := range regP.FindAllString(s, -1) {
 		content.WriteString(match)
