@@ -24,7 +24,7 @@ var (
 	regTitle    = regexp.MustCompile(`(?miU)\<title\>(.+?)\<\/title\>`)
 	regOGTitle1 = regexp.MustCompile(`(?mUi)<meta [^>]*property=[\"']og:title[\"'] [^>]*content=[\"']([^'^\"]+?)[\"'][^>]*>`)
 	regOGTitle2 = regexp.MustCompile(`(?mUi)<meta [^>]*content=[\"']([^'^\"]+?)[\"'] [^>]*property=[\"']og:image[\"'][^>]*>`)
-	regP        = regexp.MustCompile(`(?mi)(\<p\>.+?\<\/p\>)`)
+	regP        = regexp.MustCompile(`(?mi)(\<p( id=\"[\S]*?\")?( class=\"[\S\s]*?\")?\>.+?\<\/p\>)`)
 	regATag1    = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
 	regATag2    = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
 
