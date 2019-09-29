@@ -21,10 +21,12 @@ import (
 var (
 	r = flag.Bool("r", false, "")
 
-	regTitle = regexp.MustCompile(`(?miU)\<title\>(.+?)\<\/title\>`)
-	regP     = regexp.MustCompile(`(?mi)(\<p\>.+?\<\/p\>)`)
-	regATag1 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
-	regATag2 = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
+	regTitle    = regexp.MustCompile(`(?miU)\<title\>(.+?)\<\/title\>`)
+	regOGTitle1 = regexp.MustCompile(`(?mUi)<meta [^>]*property=[\"']og:title[\"'] [^>]*content=[\"']([^'^\"]+?)[\"'][^>]*>`)
+	regOGTitle2 = regexp.MustCompile(`(?mUi)<meta [^>]*content=[\"']([^'^\"]+?)[\"'] [^>]*property=[\"']og:image[\"'][^>]*>`)
+	regP        = regexp.MustCompile(`(?mi)(\<p\>.+?\<\/p\>)`)
+	regATag1    = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>`)
+	regATag2    = regexp.MustCompile(`(?mi)<a.+?href\=\"(.+?)\".*?\>(.*?)\<\/a\>`)
 
 	title string
 	err   error
@@ -67,6 +69,7 @@ func main() {
 		}
 	}
 
+	setTitle(body)
 	article := getArticle(body)
 
 	if article == "" {
@@ -139,9 +142,25 @@ func buildParsePolicy() *bluemonday.Policy {
 	return p
 }
 
-func getArticle(s string) string {
-	title = regTitle.FindStringSubmatch(s)[1]
+func setTitle(s string) {
+	t := regTitle.FindStringSubmatch(s)
 
+	if len(t) <= 1 {
+		t = regOGTitle1.FindStringSubmatch(s)
+	}
+
+	if len(t) <= 1 {
+		t = regOGTitle2.FindStringSubmatch(s)
+	}
+
+	if len(t) <= 1 {
+		title = ""
+	}
+
+	title = t[1]
+}
+
+func getArticle(s string) string {
 	var content strings.Builder
 	for _, match := range regP.FindAllString(s, -1) {
 		content.WriteString(match)
